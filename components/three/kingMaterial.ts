@@ -61,3 +61,20 @@ export function clipNone(km: KingMaterial) {
   km.plane.normal.set(0, 1, 0);
   km.plane.constant = KEEP_ALL;
 }
+
+// The cross is the one part every king shares: polished brass, whatever the
+// body is made of, like the hardware on a fine door or a switch plate.
+let hardware: THREE.MeshPhysicalMaterial | null = null;
+export function getHardwareMaterial() {
+  hardware ??= new THREE.MeshPhysicalMaterial({
+    color: "#d9b36c",
+    metalness: 1,
+    // Satin rather than mirror: a mirror-flat face only shows whatever is
+    // straight behind the camera, which is usually darkness.
+    roughness: 0.3,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.2,
+    envMapIntensity: 1.6,
+  });
+  return hardware;
+}

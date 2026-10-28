@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Camera, Material } from "@/lib/types";
-import King from "@/components/three/King";
+import { KingBody, KingCross } from "@/components/three/King";
 import Studio from "@/components/three/Studio";
 import {
   clipAbove,
@@ -116,9 +116,10 @@ function Rig({ stops, progress, reducedMotion }: { stops: Stop[]; progress: RefO
             else groups.current.delete(key);
           }}
         >
-          <King km={km} />
+          <KingBody km={km} />
         </group>
       ))}
+      <KingCross />
     </group>
   );
 }

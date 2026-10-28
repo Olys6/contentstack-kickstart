@@ -6,10 +6,11 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { Material } from "@/lib/types";
 import King from "./King";
+import type { SilhouetteName } from "./kingGeometry";
 import Studio from "./Studio";
 import { createKingMaterial, materialKey } from "./kingMaterial";
 
-function Piece({ material, spin }: { material: Material; spin: boolean }) {
+function Piece({ material, spin, silhouette }: { material: Material; spin: boolean; silhouette?: SilhouetteName }) {
   const key = materialKey(material);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const km = useMemo(() => createKingMaterial(material), [key]);
@@ -25,7 +26,7 @@ function Piece({ material, spin }: { material: Material; spin: boolean }) {
 
   return (
     <group ref={group}>
-      <King km={km} />
+      <King km={km} silhouette={silhouette} />
     </group>
   );
 }
@@ -40,11 +41,13 @@ export default function PieceCanvas({
   interactive = false,
   spin = false,
   distance = 3,
+  silhouette,
 }: {
   material: Material;
   interactive?: boolean;
   spin?: boolean;
   distance?: number;
+  silhouette?: SilhouetteName;
 }) {
   return (
     <Canvas
@@ -60,7 +63,7 @@ export default function PieceCanvas({
       }}
     >
       <Studio shadowOpacity={0.7} />
-      <Piece material={material} spin={spin} />
+      <Piece material={material} spin={spin} silhouette={silhouette} />
       {interactive && (
         <OrbitControls
           target={[0, 0.47, 0]}

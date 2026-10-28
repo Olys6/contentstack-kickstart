@@ -1,23 +1,38 @@
 "use client";
 
 import { useMemo } from "react";
-import { createBodyGeometry, createCrossGeometry } from "./kingGeometry";
-import type { KingMaterial } from "./kingMaterial";
+import type * as THREE from "three";
+import { SILHOUETTE, createBodyGeometry, createCrossGeometry, type SilhouetteName } from "./kingGeometry";
+import { getHardwareMaterial, type KingMaterial } from "./kingMaterial";
 
-let shared: { body: ReturnType<typeof createBodyGeometry>; cross: ReturnType<typeof createCrossGeometry> } | null =
-  null;
+const cache = new Map<SilhouetteName, { body: THREE.BufferGeometry; cross: THREE.BufferGeometry }>();
 
-function geometry() {
-  shared ??= { body: createBodyGeometry(), cross: createCrossGeometry() };
-  return shared;
+function geometry(name: SilhouetteName) {
+  let g = cache.get(name);
+  if (!g) {
+    g = { body: createBodyGeometry(name), cross: createCrossGeometry(name) };
+    cache.set(name, g);
+  }
+  return g;
 }
 
-export default function King({ km, visible = true }: { km: KingMaterial; visible?: boolean }) {
-  const { body, cross } = useMemo(() => geometry(), []);
+/** The turned body in its material. */
+export function KingBody({ km, silhouette = SILHOUETTE }: { km: KingMaterial; silhouette?: SilhouetteName }) {
+  const { body } = useMemo(() => geometry(silhouette), [silhouette]);
+  return <mesh geometry={body} material={km.material} castShadow receiveShadow />;
+}
+
+/** The brass cross, shared by every king and never part of a material sweep. */
+export function KingCross({ silhouette = SILHOUETTE }: { silhouette?: SilhouetteName }) {
+  const { cross } = useMemo(() => geometry(silhouette), [silhouette]);
+  return <mesh geometry={cross} material={getHardwareMaterial()} castShadow />;
+}
+
+export default function King({ km, silhouette = SILHOUETTE }: { km: KingMaterial; silhouette?: SilhouetteName }) {
   return (
-    <group visible={visible}>
-      <mesh geometry={body} material={km.material} castShadow receiveShadow />
-      <mesh geometry={cross} material={km.material} castShadow />
+    <group>
+      <KingBody km={km} silhouette={silhouette} />
+      <KingCross silhouette={silhouette} />
     </group>
   );
 }

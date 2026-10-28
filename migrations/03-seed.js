@@ -107,15 +107,15 @@ const chapterShape = [
 const chapterCopy = {
   en: [
     { eyebrow: "Chess atelier · Geneva", headline: "The King", body: "One piece. Eight months in the workshop." },
-    { eyebrow: "I — The crown", headline: "It all begins with the cross.", body: "Hand-carved, then fitted to a tenth of a millimetre, the cross is the last part set in place and the first one you notice." },
-    { eyebrow: "II — The lathe", headline: "Born from a single profile.", body: "Every king is turned from one drawing: a single line that defines its silhouette, from base to collar. The same profile, in every material." },
+    { eyebrow: "I — The crown", headline: "It all begins with the cross.", body: "Polished brass, turned and fitted to a hundredth of a millimetre, the cross is the one part all our kings share." },
+    { eyebrow: "II — The lathe", headline: "Born from a single profile.", body: "Every king is turned from a single drawing, base to crown. Only the collar is knurled, as finely as a piece of watchmaking." },
     { eyebrow: "III — The material", headline: "Five materials, one character.", body: "Jura walnut, Carrara marble, brushed brass, smoked oak, blackened steel. Each brings its own weight, its own light and its own hours at the bench." },
     { eyebrow: "IV — The base", headline: "Weighted so it never wavers.", body: "A tungsten core and a base wrapped in wool felt. Set on the board, the king holds its ground." },
   ],
   fr: [
     { eyebrow: "Atelier d'échecs · Genève", headline: "Le Roi", body: "Une seule pièce. Huit mois d'atelier." },
-    { eyebrow: "I — La couronne", headline: "Tout commence par la croix.", body: "Taillée à la main puis ajustée au dixième de millimètre, la croix est la dernière pièce posée et la première que l'on regarde." },
-    { eyebrow: "II — Le tour", headline: "Né d'un seul profil.", body: "Chaque roi est tourné à partir d'un unique dessin : une seule ligne qui définit sa silhouette, de la base au col. Le même profil, dans chaque matière." },
+    { eyebrow: "I — La couronne", headline: "Tout commence par la croix.", body: "En laiton poli, tournée puis ajustée au centième de millimètre, la croix est la seule pièce que partagent tous nos rois." },
+    { eyebrow: "II — Le tour", headline: "Né d'un seul profil.", body: "Chaque roi est tourné à partir d'un unique dessin, de la base à la couronne. Seul le col reçoit un moletage, aussi fin que celui d'une pièce d'horlogerie." },
     { eyebrow: "III — La matière", headline: "Cinq matières, un caractère.", body: "Noyer du Jura, marbre de Carrare, laiton brossé, chêne fumé, acier noirci. Chaque matière impose son poids, sa lumière et son temps d'établi." },
     { eyebrow: "IV — L'assise", headline: "Lesté pour ne jamais vaciller.", body: "Un cœur de tungstène, une base gainée de feutre de laine. Posé sur l'échiquier, le roi tient sa place." },
   ],
