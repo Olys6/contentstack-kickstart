@@ -1,128 +1,120 @@
-export interface PublishDetails {
-  environment: string;
-  locale: string;
-  time: string;
-  user: string;
-}
-
-export interface File {
-  uid: string;
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-  updated_by: string;
-  content_type: string;
-  file_size: string;
-  tags: string[];
-  filename: string;
-  url: string;
-  ACL: any[] | object;
-  is_dir: boolean;
-  parent_uid: string;
-  _version: number;
-  title: string;
-  _metadata?: object;
-  description?: string;
-  dimension?: {
-    height: number;
-    width: number;
-  };
-  publish_details: PublishDetails;
-  /** CSLP mapping for editable fields */
-  $?: {
-    url?: CSLPFieldMapping;
-    title?: CSLPFieldMapping;
-    filename?: CSLPFieldMapping;
-    description?: CSLPFieldMapping;
-  };
-}
-
-export interface Link {
-  title: string;
-  href: string;
-}
-
-export interface Taxonomy {
-  taxonomy_uid: string;
-  max_terms?: number;
-  mandatory: boolean;
-  non_localizable: boolean;
-}
-
 export interface CSLPAttribute {
   "data-cslp"?: string;
   "data-cslp-parent-field"?: string;
 }
 export type CSLPFieldMapping = CSLPAttribute;
 
+/** Live Preview tags added by `addEditableTags`, keyed by field uid. */
+type Editable<K extends string> = { $?: Partial<Record<K | `${K}__${number}`, CSLPFieldMapping>> };
+
 export interface SystemFields {
-  uid?: string;
-  created_at?: string;
-  updated_at?: string;
-  created_by?: string;
-  updated_by?: string;
-  _content_type_uid?: string;
-  tags?: string[];
-  ACL?: any[];
-  _version?: number;
-  _in_progress?: boolean;
-  locale?: string;
-  publish_details?: PublishDetails;
-  title?: string;
-}
-
-/** A block! */
-export interface Block {
-  /** Version */
-  _version?: number;
-  /** Title */
-  title?: string;
-  /** Copy */
-  copy?: string;
-  /** Image */
-  image?: File | null;
-  /** Layout */
-  layout?: ("image_left" | "image_right") | null;
-  /** Metadata */
-  _metadata?: { uid: string };
-  /** CSLP mapping for editable fields */
-  $?: {
-    title?: CSLPFieldMapping;
-    copy?: CSLPFieldMapping;
-    image?: CSLPFieldMapping;
-    layout?: CSLPFieldMapping;
-  };
-}
-
-export interface Blocks extends SystemFields {
-  block: Block;
-}
-
-export interface Page extends SystemFields {
-  /** UID - required for live preview */
   uid: string;
-  /** Version */
+  locale?: string;
   _version?: number;
-  /** Title */
+  _content_type_uid?: string;
   title: string;
-  /** URL */
-  url?: string;
-  /** Description */
-  description?: string;
-  /** Image */
-  image?: File | null;
-  /** Rich Text */
-  rich_text?: string;
-  /** blocks */
-  blocks?: Blocks[];
-  /** CSLP mapping for editable fields */
-  $?: {
-    title?: CSLPFieldMapping;
-    url?: CSLPFieldMapping;
-    description?: CSLPFieldMapping;
-    image?: CSLPFieldMapping;
-    rich_text?: CSLPFieldMapping;
-    blocks?: CSLPFieldMapping;
-    [key: string]: CSLPFieldMapping | undefined; // Allow dynamic block indexing
-  };
 }
+
+export type Grain = "wood" | "marble" | "metal" | "none";
+
+export interface Material
+  extends SystemFields,
+    Editable<"title" | "origin" | "description"> {
+  slug: string;
+  color: string;
+  accent_color: string;
+  grain: Grain;
+  roughness: number;
+  metalness: number;
+  clearcoat: number;
+  origin?: string;
+  description?: string;
+}
+
+export interface Camera {
+  azimuth: number;
+  elevation: number;
+  distance: number;
+  focus: number;
+  offset: number;
+}
+
+export interface Detail extends Editable<"label" | "value"> {
+  label: string;
+  value: string;
+}
+
+export interface Product
+  extends SystemFields,
+    Editable<"title" | "tagline" | "description" | "price" | "edition_size" | "height_mm" | "details"> {
+  url: string;
+  tagline?: string;
+  description?: string;
+  material: Material[];
+  price: number;
+  edition_size?: number;
+  height_mm?: number;
+  details?: Detail[];
+}
+
+export type ChapterLayout = "hero" | "left" | "right" | "center";
+
+export interface Chapter extends Editable<"eyebrow" | "headline" | "body" | "layout" | "material" | "camera"> {
+  eyebrow?: string;
+  headline?: string;
+  body?: string;
+  layout: ChapterLayout;
+  material?: Material[];
+  camera: Camera;
+  _metadata?: { uid: string };
+}
+
+export interface CollectionTeaser
+  extends Editable<"eyebrow" | "headline" | "body" | "cta_label" | "products" | "camera"> {
+  eyebrow?: string;
+  headline?: string;
+  body?: string;
+  cta_label?: string;
+  products?: Product[];
+  camera: Camera;
+  _metadata?: { uid: string };
+}
+
+export type HomeBlock = { chapter: Chapter } | { collection_teaser: CollectionTeaser };
+
+export interface Home extends SystemFields, Editable<"title" | "chapters"> {
+  url: string;
+  seo_description?: string;
+  chapters: HomeBlock[];
+}
+
+export interface CollectionPage extends SystemFields, Editable<"eyebrow" | "headline" | "intro" | "products"> {
+  url: string;
+  eyebrow?: string;
+  headline?: string;
+  intro?: string;
+  products: Product[];
+}
+
+type SettingsKey =
+  | "brand_name"
+  | "brand_tagline"
+  | "nav_home"
+  | "nav_collection"
+  | "cart_label"
+  | "cart_title"
+  | "cart_empty"
+  | "add_to_cart"
+  | "added_to_cart"
+  | "remove_label"
+  | "subtotal_label"
+  | "checkout_label"
+  | "checkout_note"
+  | "discover_label"
+  | "edition_label"
+  | "height_label"
+  | "material_label"
+  | "scroll_hint"
+  | "footer_note";
+
+export type SiteSettings = SystemFields & Editable<SettingsKey> & Record<SettingsKey, string>;

@@ -45,3 +45,6 @@ tree-maker
 .cursor
 .claude/
 .cursor/
+
+# Contentstack CLI migration logs
+/logs

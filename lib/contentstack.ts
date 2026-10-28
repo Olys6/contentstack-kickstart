@@ -4,8 +4,8 @@ import contentstack, { QueryOperation } from "@contentstack/delivery-sdk";
 // Importing Contentstack Live Preview utilities and stack SDK
 import ContentstackLivePreview, { IStackSdk } from "@contentstack/live-preview-utils";
 
-// Importing the Page type definition
-import { Page } from "./types";
+import type { CollectionPage, Home, Product, SiteSettings } from "./types";
+import type { Locale } from "./i18n";
 
 // helper functions to retrieve Contentstack endpoints for a given region
 import { getContentstackEndpoint, type ContentstackEndpoints } from "@contentstack/utils";
@@ -47,8 +47,11 @@ export const stack = contentstack.stack({
   }
 });
 
-// Initialize live preview functionality
+// Initialize live preview functionality (once per page load)
+let livePreviewStarted = false;
 export function initLivePreview() {
+  if (livePreviewStarted) return;
+  livePreviewStarted = true;
   ContentstackLivePreview.init({
     ssr: false, // Disabling server-side rendering for live preview
     enable: process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW === 'true', // Enabling live preview if specified in environment variables
@@ -69,22 +72,56 @@ export function initLivePreview() {
     },
   });
 }
-// Function to fetch page data based on the URL
-export async function getPage(url: string) {
-  const result = await stack
-    .contentType("page") // Specifying the content type as "page"
-    .entry() // Accessing the entry
-    .query() // Creating a query
-    .where("url", QueryOperation.EQUALS, url) // Filtering entries by URL
-    .find<Page>(); // Executing the query and expecting a result of type Page
+// Fetch helpers. Each one asks for the locale with fallback to en-us, resolves
+// the references the page renders, and adds Visual Builder tags in preview.
 
-  if (result.entries) {
-    const entry = result.entries[0]; // Getting the first entry from the result
-
-    if (isPreview) {
-      contentstack.Utils.addEditableTags(entry, 'page', true); // Adding editable tags for live preview if enabled
-    }
-
-    return entry; // Returning the fetched entry
+function tag<T>(entry: T | undefined, contentType: string, locale: Locale): T | undefined {
+  if (entry && isPreview) {
+    contentstack.Utils.addEditableTags(entry as never, contentType, true, locale);
   }
+  return entry;
+}
+
+function entries(contentType: string, locale: Locale) {
+  return stack.contentType(contentType).entry().locale(locale).includeFallback();
+}
+
+export async function getSiteSettings(locale: Locale) {
+  const result = await entries("site_settings", locale).query().find<SiteSettings>();
+  return tag(result.entries?.[0], "site_settings", locale);
+}
+
+export async function getHome(locale: Locale) {
+  const result = await entries("home", locale)
+    .includeReference(
+      "chapters.chapter.material",
+      "chapters.collection_teaser.products",
+      "chapters.collection_teaser.products.material",
+    )
+    .query()
+    .find<Home>();
+  return tag(result.entries?.[0], "home", locale);
+}
+
+export async function getCollectionPage(locale: Locale) {
+  const result = await entries("collection_page", locale)
+    .includeReference("products", "products.material")
+    .query()
+    .find<CollectionPage>();
+  return tag(result.entries?.[0], "collection_page", locale);
+}
+
+export async function getProduct(url: string, locale: Locale) {
+  const result = await entries("product", locale)
+    .includeReference("material")
+    .query()
+    .where("url", QueryOperation.EQUALS, url)
+    .find<Product>();
+  return tag(result.entries?.[0], "product", locale);
+}
+
+/** Every product with its material: powers the material switcher on the product page. */
+export async function getProducts(locale: Locale) {
+  const result = await entries("product", locale).includeReference("material").query().find<Product>();
+  return result.entries ?? [];
 }
