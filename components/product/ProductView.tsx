@@ -28,7 +28,14 @@ export default function ProductView({ initial, siblings }: { initial: Product; s
     <div className="grid min-h-[100svh] lg:grid-cols-[1.25fr_1fr]">
       <div className="relative h-[70svh] lg:sticky lg:top-0 lg:h-[100svh]">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,#1f1c17,transparent_65%)]" />
-        {material && <PieceCanvas material={material} interactive distance={3.1} />}
+        {material && (
+          <PieceCanvas
+            material={material}
+            interactive
+            distance={3.1}
+            label={fill(settings.model_label, { name: product.title })}
+          />
+        )}
       </div>
 
       <div className="relative z-10 flex flex-col justify-center px-4 pb-24 pt-10 md:px-12 lg:pt-32 xl:px-20">

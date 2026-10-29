@@ -29,7 +29,14 @@ function PieceCard({ product, index, wide }: { product: Product; index: number; 
     >
       <div className={`relative overflow-hidden ${wide ? "aspect-[4/5] lg:aspect-[6/5]" : "aspect-[4/5]"}`}>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,#1d1b17,transparent_70%)]" />
-        {material && <PieceCanvas material={material} spin={hover} distance={3.2} />}
+        {material && (
+          <PieceCanvas
+            material={material}
+            spin={hover}
+            distance={3.2}
+            label={fill(settings.model_label, { name: product.title })}
+          />
+        )}
         <span className="text-label absolute left-6 top-6 text-ivory/40 tabular-nums">
           {String(index + 1).padStart(2, "0")}
         </span>

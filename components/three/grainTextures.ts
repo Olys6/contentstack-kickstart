@@ -60,47 +60,94 @@ const patterns: Record<Exclude<Grain, "none">, (cx: number, cz: number, v: numbe
   },
 };
 
-const cache = new Map<string, THREE.CanvasTexture>();
+export interface GrainTexture {
+  texture: THREE.CanvasTexture;
+  /** Resolves once the grain is fully drawn and uploaded. */
+  ready: Promise<void>;
+}
 
-export function getGrainTexture(grain: Grain, base: string, accent: string): THREE.CanvasTexture | null {
+// Drawing a 512² texture is a few hundred milliseconds of maths, so it is done
+// in small slices between frames instead of in one block. Textures are drawn
+// one at a time, in the order they were asked for (the first chapter first).
+const SLICE_MS = 6;
+const queue: (() => boolean)[] = [];
+let pumping = false;
+
+function pump() {
+  const start = performance.now();
+  while (queue.length && performance.now() - start < SLICE_MS) {
+    if (queue[0]()) queue.shift();
+  }
+  if (queue.length) setTimeout(pump, 0);
+  else pumping = false;
+}
+
+function schedule(job: () => boolean) {
+  queue.push(job);
+  if (!pumping) {
+    pumping = true;
+    setTimeout(pump, 0);
+  }
+}
+
+const cache = new Map<string, GrainTexture>();
+const W = 512;
+const H = 512;
+const ROWS_PER_STEP = 4;
+
+export function getGrainTexture(grain: Grain, base: string, accent: string): GrainTexture | null {
   if (grain === "none" || typeof document === "undefined") return null;
   const key = `${grain}:${base}:${accent}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const W = 512, H = 512;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
-  const img = ctx.createImageData(W, H);
-
-  const a = new THREE.Color(base);
-  const b = new THREE.Color(accent);
-  const pattern = patterns[grain];
-  const R = 1.6; // cylinder radius in noise space
-
-  for (let y = 0; y < H; y++) {
-    const v = (y / H) * 4;
-    for (let x = 0; x < W; x++) {
-      const angle = (x / W) * Math.PI * 2;
-      const t = pattern(Math.cos(angle) * R, Math.sin(angle) * R, v);
-      const i = (y * W + x) * 4;
-      // Colours are in linear space; write sRGB bytes for the canvas.
-      const c = a.clone().lerp(b, t).convertLinearToSRGB();
-      img.data[i] = c.r * 255;
-      img.data[i + 1] = c.g * 255;
-      img.data[i + 2] = c.b * 255;
-      img.data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
+  // Until the grain is ready the piece shows its plain base colour.
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, W, H);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.anisotropy = 8;
-  cache.set(key, texture);
-  return texture;
+
+  const img = ctx.createImageData(W, H);
+  const a = new THREE.Color(base);
+  const b = new THREE.Color(accent);
+  const c = new THREE.Color();
+  const pattern = patterns[grain];
+  const R = 1.6; // cylinder radius in noise space
+  let y = 0;
+
+  const ready = new Promise<void>((resolve) => {
+    schedule(() => {
+      for (const end = Math.min(H, y + ROWS_PER_STEP); y < end; y++) {
+        const v = (y / H) * 4;
+        for (let x = 0; x < W; x++) {
+          const angle = (x / W) * Math.PI * 2;
+          const t = pattern(Math.cos(angle) * R, Math.sin(angle) * R, v);
+          const i = (y * W + x) * 4;
+          // Colours are in linear space; write sRGB bytes for the canvas.
+          c.copy(a).lerp(b, t).convertLinearToSRGB();
+          img.data[i] = c.r * 255;
+          img.data[i + 1] = c.g * 255;
+          img.data[i + 2] = c.b * 255;
+          img.data[i + 3] = 255;
+        }
+      }
+      if (y < H) return false;
+      ctx.putImageData(img, 0, 0);
+      texture.needsUpdate = true;
+      resolve();
+      return true;
+    });
+  });
+
+  const entry = { texture, ready };
+  cache.set(key, entry);
+  return entry;
 }

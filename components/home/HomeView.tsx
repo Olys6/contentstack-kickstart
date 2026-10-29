@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { VB_EmptyBlockParentClass } from "@contentstack/live-preview-utils";
 import { getHome } from "@/lib/contentstack";
-import { formatPrice, toLocale } from "@/lib/i18n";
+import { fill, formatPrice, toLocale } from "@/lib/i18n";
 import type { Chapter, CollectionTeaser, Home, Material } from "@/lib/types";
 import { useLiveEntry } from "@/components/live/useLiveEntry";
 import { useReducedMotion } from "@/lib/useReducedMotion";
@@ -43,7 +43,9 @@ function useChapterProgress(container: React.RefObject<HTMLElement | null>) {
   const progress = useRef(0);
   useEffect(() => {
     let centres: number[] = [];
+    let hero: HTMLElement | null = null;
     const measure = () => {
+      hero = container.current?.querySelector<HTMLElement>("[data-hero-copy]") ?? null;
       const sections = container.current?.querySelectorAll<HTMLElement>("[data-chapter]") ?? [];
       centres = [...sections].map((s) => s.getBoundingClientRect().top + window.scrollY + s.offsetHeight / 2);
     };
@@ -55,6 +57,16 @@ function useChapterProgress(container: React.RefObject<HTMLElement | null>) {
         while (i < centres.length - 2 && mid > centres[i + 1]) i++;
         const t = (mid - centres[i]) / (centres[i + 1] - centres[i]);
         progress.current = Math.max(0, Math.min(centres.length - 1, i + t));
+      }
+      // The hero copy holds nearly still while the page scrolls (the king is
+      // fixed, so copy moving at full speed would slide over it) and fades out
+      // over the first third of a screen.
+      if (hero) {
+        const y = Math.max(0, window.scrollY);
+        const fade = Math.max(0, Math.min(1, 1 - y / (window.innerHeight * 0.3)));
+        hero.style.opacity = String(fade);
+        hero.style.transform = `translateY(${y * 0.8}px)`;
+        hero.style.visibility = fade === 0 ? "hidden" : "";
       }
       raf = requestAnimationFrame(tick);
     };
@@ -85,7 +97,17 @@ function useInView<T extends HTMLElement>() {
   return [ref, inView] as const;
 }
 
-function ChapterSection({ chapter, index, cslp }: { chapter: Chapter; index: number; cslp?: object }) {
+function ChapterSection({
+  chapter,
+  index,
+  cslp,
+  revealed,
+}: {
+  chapter: Chapter;
+  index: number;
+  cslp?: object;
+  revealed: boolean;
+}) {
   const [ref, inView] = useInView<HTMLDivElement>();
   const { settings } = useSite();
   const hero = chapter.layout === "hero";
@@ -100,26 +122,32 @@ function ChapterSection({ chapter, index, cslp }: { chapter: Chapter; index: num
   return (
     <section
       data-chapter={index}
-      className={`relative flex px-4 md:px-[8vw] ${hero ? "min-h-[100svh]" : "min-h-[150svh]"} ${place}`}
+      className={`relative flex px-4 md:px-[8vw] ${hero ? "min-h-[100svh]" : "min-h-[105svh]"} ${place}`}
       {...cslp}
     >
       <div
         ref={ref}
-        className={`reveal ${inView || hero ? "is-in" : ""} ${hero ? "max-w-3xl" : "max-w-md max-md:sticky max-md:bottom-0 max-md:-mx-4 max-md:bg-gradient-to-t max-md:from-ink max-md:via-ink/85 max-md:to-transparent max-md:px-4 max-md:pb-10 max-md:pt-24"}`}
+        data-hero-copy={hero ? "" : undefined}
+        className={`reveal ${(hero ? revealed : inView) ? "is-in" : ""} ${hero ? "max-w-3xl" : "max-w-md max-md:sticky max-md:bottom-0 max-md:-mx-4 max-md:bg-gradient-to-t max-md:from-ink max-md:via-ink/85 max-md:to-transparent max-md:px-4 max-md:pb-10 max-md:pt-24"}`}
       >
         {chapter.eyebrow && (
           <p className="text-label mb-6 text-gold" {...chapter.$?.eyebrow}>
             {chapter.eyebrow}
           </p>
         )}
-        {chapter.headline && (
-          <h2
-            className={`font-display font-light leading-[0.95] text-balance ${hero ? "text-[clamp(4rem,10vw,8.5rem)] tracking-[-0.02em]" : "text-[clamp(2.4rem,4.4vw,4rem)]"}`}
-            {...chapter.$?.headline}
-          >
-            {chapter.headline}
-          </h2>
-        )}
+        {chapter.headline &&
+          (hero ? (
+            <h1
+              className="font-display text-[clamp(4rem,10vw,8.5rem)] font-light leading-[0.95] tracking-[-0.02em] text-balance"
+              {...chapter.$?.headline}
+            >
+              {chapter.headline}
+            </h1>
+          ) : (
+            <h2 className="font-display text-[clamp(2.4rem,4.4vw,4rem)] font-light leading-[0.95] text-balance" {...chapter.$?.headline}>
+              {chapter.headline}
+            </h2>
+          ))}
         {chapter.body && (
           <p
             className={`mt-6 text-ivory/70 text-pretty ${hero ? "font-display text-2xl italic font-light" : "text-[1.05rem] leading-relaxed"}`}
@@ -129,8 +157,9 @@ function ChapterSection({ chapter, index, cslp }: { chapter: Chapter; index: num
           </p>
         )}
         {hero && (
-          <p className="text-label mt-10 animate-pulse text-ivory/40" {...settings.$?.scroll_hint}>
-            {settings.scroll_hint} ↓
+          <p className="text-label mt-10 text-ivory/40" {...settings.$?.scroll_hint}>
+            {/* Pulse lives on the inner span so it cannot override the reveal fade. */}
+            <span className="animate-pulse">{settings.scroll_hint} ↓</span>
           </p>
         )}
       </div>
@@ -144,7 +173,7 @@ function TeaserSection({ teaser, index, cslp }: { teaser: CollectionTeaser; inde
   return (
     <section
       data-chapter={index}
-      className="relative flex min-h-[130svh] items-end bg-gradient-to-b from-transparent via-ink/40 via-60% to-ink px-4 pb-24 md:px-[8vw]"
+      className="relative flex min-h-[110svh] items-end bg-gradient-to-b from-transparent via-ink/40 via-60% to-ink px-4 pb-24 md:px-[8vw]"
       {...cslp}
     >
       <div ref={ref} className={`reveal is-staggered w-full ${inView ? "is-in" : ""}`}>
@@ -205,10 +234,25 @@ export default function HomeView({ initial }: { initial: Home }) {
   const stops = useMemo(() => toStops(home), [home]);
   const reducedMotion = useReducedMotion();
 
+  // The hero copy arrives with the lights. If WebGL is slow or unavailable,
+  // it shows anyway after a moment so the page never looks empty.
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setRevealed(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
+  const { settings } = useSite();
+  const heroName = home.chapters.find((b) => "chapter" in b)?.chapter?.headline ?? settings.brand_name;
+
   return (
     <>
-      <div className="fixed inset-0 z-0">
-        <StoryCanvas stops={stops} progress={progress} reducedMotion={reducedMotion} />
+      <div className="fixed inset-0 z-0" role="img" aria-label={fill(settings.model_label, { name: heroName })}>
+        <StoryCanvas
+          stops={stops}
+          progress={progress}
+          reducedMotion={reducedMotion}
+          onReveal={() => setTimeout(() => setRevealed(true), 500)}
+        />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,var(--color-ink)_100%)]" />
       </div>
       <div
@@ -219,7 +263,15 @@ export default function HomeView({ initial }: { initial: Home }) {
         {home.chapters.map((block, i) => {
           const cslp = home.$?.[`chapters__${i}`];
           if ("chapter" in block) {
-            return <ChapterSection key={block.chapter._metadata?.uid ?? i} chapter={block.chapter} index={i} cslp={cslp} />;
+            return (
+              <ChapterSection
+                key={block.chapter._metadata?.uid ?? i}
+                chapter={block.chapter}
+                index={i}
+                cslp={cslp}
+                revealed={revealed}
+              />
+            );
           }
           return (
             <TeaserSection

@@ -8,6 +8,8 @@ import { getGrainTexture } from "./grainTextures";
 export interface KingMaterial {
   material: THREE.MeshPhysicalMaterial;
   plane: THREE.Plane;
+  /** Resolves when the grain texture has finished drawing. */
+  ready: Promise<void>;
 }
 
 const KEEP_ALL = 1000;
@@ -21,7 +23,8 @@ export function materialKey(m: Material) {
 
 export function createKingMaterial(m: Material): KingMaterial {
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), KEEP_ALL);
-  const map = getGrainTexture(m.grain, m.color, m.accent_color || m.color);
+  const grain = getGrainTexture(m.grain, m.color, m.accent_color || m.color);
+  const map = grain?.texture ?? null;
   const metal = num(m.metalness, 0);
 
   const material = new THREE.MeshPhysicalMaterial({
@@ -42,7 +45,7 @@ export function createKingMaterial(m: Material): KingMaterial {
     material.anisotropyRotation = Math.PI / 2;
   }
 
-  return { material, plane };
+  return { material, plane, ready: grain?.ready ?? Promise.resolve() };
 }
 
 /** Show only the part of the piece below `height`. */

@@ -152,6 +152,8 @@ const settingsCopy = {
     height_label: "Height",
     material_label: "Material",
     scroll_hint: "Scroll",
+    clock_label: "Geneva time",
+    model_label: "3D model: {name}",
     footer_note: "A demonstration project built with Contentstack and Next.js. Maison Roque is a fictional brand.",
   },
   fr: {
@@ -174,6 +176,8 @@ const settingsCopy = {
     height_label: "Hauteur",
     material_label: "Matière",
     scroll_hint: "Faire défiler",
+    clock_label: "Heure de Genève",
+    model_label: "Modèle 3D : {name}",
     footer_note: "Projet de démonstration réalisé avec Contentstack et Next.js. Maison Roque est une marque fictive.",
   },
 };

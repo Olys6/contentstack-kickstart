@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LANGS, type Lang } from "@/lib/i18n";
 import { useHref, useSite } from "./SiteProvider";
@@ -11,12 +12,23 @@ export default function Header() {
   const pathname = usePathname();
   const count = cart.reduce((n, i) => n + i.quantity, 0);
 
+  // Transparent over the hero; frosted once content starts passing beneath it.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Same page, other language: /fr/pieces/roi-noyer → /en/pieces/roi-noyer
   const switchTo = (to: Lang) => pathname.replace(/^\/(fr|en)(?=\/|$)/, `/${to}`);
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 text-ivory">
-      <div className="pointer-events-none absolute inset-0 h-28 bg-gradient-to-b from-ink/80 to-transparent" />
+      <div
+        className={`pointer-events-none absolute inset-0 border-b transition-[background-color,border-color,backdrop-filter] duration-700 ${scrolled ? "border-ivory/10 bg-ink/75 backdrop-blur-xl" : "border-transparent bg-transparent"}`}
+      />
       <nav className="relative mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 md:grid md:h-20 md:grid-cols-[1fr_auto_1fr] md:px-10">
         <div className="hidden items-center gap-8 text-label md:flex">
           <Link href={href("/collection")} className="link-underline" {...settings.$?.nav_collection}>

@@ -115,6 +115,8 @@ type SettingsKey =
   | "height_label"
   | "material_label"
   | "scroll_hint"
+  | "clock_label"
+  | "model_label"
   | "footer_note";
 
 export type SiteSettings = SystemFields & Editable<SettingsKey> & Record<SettingsKey, string>;

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Camera, Material } from "@/lib/types";
 import { KingBody, KingCross } from "@/components/three/King";
 import Studio from "@/components/three/Studio";
+import Reveal from "@/components/three/Reveal";
 import {
   clipAbove,
   clipBelow,
@@ -24,7 +25,15 @@ export interface Stop {
 const { damp, lerp, smoothstep, degToRad, clamp } = THREE.MathUtils;
 const PARAMS = ["azimuth", "elevation", "distance", "focus", "offset"] as const;
 
-function Rig({ stops, progress, reducedMotion }: { stops: Stop[]; progress: RefObject<number>; reducedMotion: boolean }) {
+interface StoryProps {
+  stops: Stop[];
+  progress: RefObject<number>;
+  reducedMotion: boolean;
+  /** Called once, when the lights start coming up. */
+  onReveal?: () => void;
+}
+
+function Rig({ stops, progress, reducedMotion, onReveal }: StoryProps) {
   const camera = useThree((s) => s.camera as THREE.PerspectiveCamera);
   const size = useThree((s) => s.size);
 
@@ -43,6 +52,18 @@ function Rig({ stops, progress, reducedMotion }: { stops: Stop[]; progress: RefO
 
   useEffect(() => () => kings.forEach((k) => k.material.dispose()), [kings]);
 
+  // The reveal waits for the first chapter's grain; later ones finish drawing
+  // in the background long before they are scrolled to.
+  const [ready, setReady] = useState(false);
+  const firstKey = materialKey(stops[0].material);
+  useEffect(() => {
+    let live = true;
+    kings.get(firstKey)?.ready.then(() => live && setReady(true));
+    return () => {
+      live = false;
+    };
+  }, [kings, firstKey]);
+
   const groups = useRef(new Map<string, THREE.Group>());
   const f = useRef(progress.current ?? 0);
   const cam = useRef<Camera>({ ...stops[0].camera });
@@ -51,7 +72,11 @@ function Rig({ stops, progress, reducedMotion }: { stops: Stop[]; progress: RefO
   useFrame((state, dt) => {
     const last = stops.length - 1;
     const speed = reducedMotion ? 1000 : 1;
-    f.current = damp(f.current, clamp(progress.current ?? 0, 0, last), 3.5 * speed, dt);
+    const raw = progress.current ?? 0;
+    // Reduced motion: no flying between chapters, the camera cuts to the
+    // nearest one. A bad measurement can never leave the camera at NaN.
+    const goal = clamp(Number.isFinite(raw) ? (reducedMotion ? Math.round(raw) : raw) : 0, 0, last);
+    f.current = damp(Number.isFinite(f.current) ? f.current : goal, goal, 3.5 * speed, dt);
 
     const i = Math.min(Math.floor(f.current), last);
     const j = Math.min(i + 1, last);
@@ -108,6 +133,7 @@ function Rig({ stops, progress, reducedMotion }: { stops: Stop[]; progress: RefO
 
   return (
     <group ref={pivot}>
+      <Reveal ready={ready} instant={reducedMotion} onStart={onReveal} />
       {[...kings.entries()].map(([key, km]) => (
         <group
           key={key}
@@ -124,15 +150,7 @@ function Rig({ stops, progress, reducedMotion }: { stops: Stop[]; progress: RefO
   );
 }
 
-export default function StoryCanvas({
-  stops,
-  progress,
-  reducedMotion,
-}: {
-  stops: Stop[];
-  progress: RefObject<number>;
-  reducedMotion: boolean;
-}) {
+export default function StoryCanvas({ stops, progress, reducedMotion, onReveal }: StoryProps) {
   if (!stops.length) return null;
   return (
     <Canvas
@@ -142,11 +160,11 @@ export default function StoryCanvas({
       onCreated={({ gl }) => {
         gl.localClippingEnabled = true;
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
+        gl.toneMappingExposure = 0; // <Reveal> brings the lights up
       }}
     >
       <Studio />
-      <Rig stops={stops} progress={progress} reducedMotion={reducedMotion} />
+      <Rig stops={stops} progress={progress} reducedMotion={reducedMotion} onReveal={onReveal} />
     </Canvas>
   );
 }

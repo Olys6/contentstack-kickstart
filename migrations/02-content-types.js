@@ -213,6 +213,8 @@ const contentTypes = [
       text("height_label", "Height label"),
       text("material_label", "Material label"),
       text("scroll_hint", "Scroll hint"),
+      text("clock_label", "Clock label (Geneva time)"),
+      text("model_label", "3D model description for screen readers (use {name})"),
       text("footer_note", "Footer note"),
     ],
   },
