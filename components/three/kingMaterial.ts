@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Material } from "@/lib/types";
+import type { Grain, Material } from "@/lib/types";
 import { getGrainTexture } from "./grainTextures";
 
 // A material entry from Contentstack, turned into a physical shader.
@@ -21,14 +21,28 @@ export function materialKey(m: Material) {
   return [m.slug, m.color, m.accent_color, m.grain, m.roughness, m.metalness, m.clearcoat].join("|");
 }
 
+const HEX = /^#[0-9a-f]{6}$/i;
+const GRAINS: readonly Grain[] = ["wood", "marble", "metal", "none"];
+// A neutral stone, used when an entry arrives without usable colours.
+const PLAIN = "#8c857a";
+
+const hex = (value: unknown, fallback: string) =>
+  typeof value === "string" && HEX.test(value) ? value : fallback;
+
 export function createKingMaterial(m: Material): KingMaterial {
+  // Material data comes straight from the CMS. An unresolved reference or an
+  // unknown grain renders as a plain colour rather than breaking the scene.
+  const base = hex(m.color, PLAIN);
+  const accent = hex(m.accent_color, base);
+  const grainName = GRAINS.includes(m.grain) ? m.grain : "none";
+
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), KEEP_ALL);
-  const grain = getGrainTexture(m.grain, m.color, m.accent_color || m.color);
+  const grain = getGrainTexture(grainName, base, accent);
   const map = grain?.texture ?? null;
   const metal = num(m.metalness, 0);
 
   const material = new THREE.MeshPhysicalMaterial({
-    color: map ? 0xffffff : m.color,
+    color: map ? 0xffffff : base,
     map,
     roughness: num(m.roughness, 0.5),
     metalness: metal,
@@ -40,7 +54,7 @@ export function createKingMaterial(m: Material): KingMaterial {
   });
 
   // Brushed metal: stretch highlights around the piece.
-  if (m.grain === "metal") {
+  if (grainName === "metal") {
     material.anisotropy = 0.6;
     material.anisotropyRotation = Math.PI / 2;
   }

@@ -26,11 +26,24 @@ const FALLBACK_MATERIAL: Material = {
   clearcoat: 0.5,
 };
 
+// Editors can add a block type in Contentstack before the code that renders
+// it is deployed. Those blocks are skipped instead of crashing the page. The
+// original index is kept because Visual Builder tags are keyed by it.
+function knownBlocks(home: Home) {
+  return (home.chapters ?? []).flatMap((block, index) =>
+    ("chapter" in block && block.chapter) || ("collection_teaser" in block && block.collection_teaser)
+      ? [{ block, index }]
+      : [],
+  );
+}
+
+type KnownBlock = ReturnType<typeof knownBlocks>[number];
+
 // Each block becomes a keyframe. A block without a material keeps the
 // previous one, so editors only set a material where it should change.
-function toStops(home: Home): Stop[] {
+function toStops(blocks: KnownBlock[]): Stop[] {
   let material = FALLBACK_MATERIAL;
-  return home.chapters.map((block) => {
+  return blocks.map(({ block }) => {
     const data = "chapter" in block ? block.chapter : block.collection_teaser;
     if ("chapter" in block && block.chapter.material?.[0]) material = block.chapter.material[0];
     return { camera: data.camera, material };
@@ -231,7 +244,8 @@ export default function HomeView({ initial }: { initial: Home }) {
   const home = useLiveEntry(initial, () => getHome(toLocale(lang)));
   const container = useRef<HTMLDivElement>(null);
   const progress = useChapterProgress(container);
-  const stops = useMemo(() => toStops(home), [home]);
+  const blocks = useMemo(() => knownBlocks(home), [home]);
+  const stops = useMemo(() => toStops(blocks), [blocks]);
   const reducedMotion = useReducedMotion();
 
   // The hero copy arrives with the lights. If WebGL is slow or unavailable,
@@ -242,7 +256,8 @@ export default function HomeView({ initial }: { initial: Home }) {
     return () => clearTimeout(t);
   }, []);
   const { settings } = useSite();
-  const heroName = home.chapters.find((b) => "chapter" in b)?.chapter?.headline ?? settings.brand_name;
+  const hero = blocks.find(({ block }) => "chapter" in block)?.block;
+  const heroName = (hero && "chapter" in hero ? hero.chapter.headline : undefined) ?? settings.brand_name;
 
   return (
     <>
@@ -257,10 +272,10 @@ export default function HomeView({ initial }: { initial: Home }) {
       </div>
       <div
         ref={container}
-        className={`relative z-10 ${home.chapters.length ? "" : VB_EmptyBlockParentClass}`}
+        className={`relative z-10 ${blocks.length ? "" : VB_EmptyBlockParentClass}`}
         {...home.$?.chapters}
       >
-        {home.chapters.map((block, i) => {
+        {blocks.map(({ block, index: i }) => {
           const cslp = home.$?.[`chapters__${i}`];
           if ("chapter" in block) {
             return (

@@ -70,19 +70,35 @@ export interface GrainTexture {
 // in small slices between frames instead of in one block. Textures are drawn
 // one at a time, in the order they were asked for (the first chapter first).
 const SLICE_MS = 6;
-const queue: (() => boolean)[] = [];
+interface Job {
+  /** Draws a few rows; returns true when the texture is finished. */
+  step: () => boolean;
+  /** Called if a step throws, so whoever waits on the texture isn't left hanging. */
+  fail: () => void;
+}
+const queue: Job[] = [];
 let pumping = false;
 
 function pump() {
   const start = performance.now();
   while (queue.length && performance.now() - start < SLICE_MS) {
-    if (queue[0]()) queue.shift();
+    const job = queue[0];
+    let done = false;
+    try {
+      done = job.step();
+    } catch (error) {
+      // One bad texture must not stall the ones queued behind it.
+      console.error(error);
+      job.fail();
+      done = true;
+    }
+    if (done) queue.shift();
   }
   if (queue.length) setTimeout(pump, 0);
   else pumping = false;
 }
 
-function schedule(job: () => boolean) {
+function schedule(job: Job) {
   queue.push(job);
   if (!pumping) {
     pumping = true;
@@ -96,7 +112,7 @@ const H = 512;
 const ROWS_PER_STEP = 4;
 
 export function getGrainTexture(grain: Grain, base: string, accent: string): GrainTexture | null {
-  if (grain === "none" || typeof document === "undefined") return null;
+  if (!(grain in patterns) || typeof document === "undefined") return null;
   const key = `${grain}:${base}:${accent}`;
   const hit = cache.get(key);
   if (hit) return hit;
@@ -119,31 +135,34 @@ export function getGrainTexture(grain: Grain, base: string, accent: string): Gra
   const a = new THREE.Color(base);
   const b = new THREE.Color(accent);
   const c = new THREE.Color();
-  const pattern = patterns[grain];
+  const pattern = patterns[grain as Exclude<Grain, "none">];
   const R = 1.6; // cylinder radius in noise space
   let y = 0;
 
   const ready = new Promise<void>((resolve) => {
-    schedule(() => {
-      for (const end = Math.min(H, y + ROWS_PER_STEP); y < end; y++) {
-        const v = (y / H) * 4;
-        for (let x = 0; x < W; x++) {
-          const angle = (x / W) * Math.PI * 2;
-          const t = pattern(Math.cos(angle) * R, Math.sin(angle) * R, v);
-          const i = (y * W + x) * 4;
-          // Colours are in linear space; write sRGB bytes for the canvas.
-          c.copy(a).lerp(b, t).convertLinearToSRGB();
-          img.data[i] = c.r * 255;
-          img.data[i + 1] = c.g * 255;
-          img.data[i + 2] = c.b * 255;
-          img.data[i + 3] = 255;
+    schedule({
+      fail: resolve,
+      step: () => {
+        for (const end = Math.min(H, y + ROWS_PER_STEP); y < end; y++) {
+          const v = (y / H) * 4;
+          for (let x = 0; x < W; x++) {
+            const angle = (x / W) * Math.PI * 2;
+            const t = pattern(Math.cos(angle) * R, Math.sin(angle) * R, v);
+            const i = (y * W + x) * 4;
+            // Colours are in linear space; write sRGB bytes for the canvas.
+            c.copy(a).lerp(b, t).convertLinearToSRGB();
+            img.data[i] = c.r * 255;
+            img.data[i + 1] = c.g * 255;
+            img.data[i + 2] = c.b * 255;
+            img.data[i + 3] = 255;
+          }
         }
-      }
-      if (y < H) return false;
-      ctx.putImageData(img, 0, 0);
-      texture.needsUpdate = true;
-      resolve();
-      return true;
+        if (y < H) return false;
+        ctx.putImageData(img, 0, 0);
+        texture.needsUpdate = true;
+        resolve();
+        return true;
+      },
     });
   });
 
