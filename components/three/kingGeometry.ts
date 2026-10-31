@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { bakeOcclusion, sdBox, sdPolygon, type Sdf } from "./occlusion";
 
 // The king is a solid of revolution: one profile line (radius, height) turned
 // around the Y axis, exactly like a piece on a wood lathe. Height is
@@ -115,26 +116,102 @@ function applyKnurl(geometry: THREE.BufferGeometry, k: NonNullable<Silhouette["k
   pos.needsUpdate = true;
 }
 
+// The whole piece standing on the floor, as a distance field for baking occlusion.
+function kingSdf(name: SilhouetteName): Sdf {
+  // A lighter outline to measure against: every third point along smooth
+  // curves, but every corner kept (the collar is only a few points wide).
+  const full = sampleProfile(SILHOUETTES[name].profile);
+  const outline = full.filter((p, i) => {
+    if (i % 3 === 0 || i === 0 || i === full.length - 1) return true;
+    const a = p.clone().sub(full[i - 1]).normalize();
+    const b = full[i + 1].clone().sub(p).normalize();
+    return a.dot(b) < Math.cos(THREE.MathUtils.degToRad(12));
+  });
+  const bars = crossBars(name);
+  return (x, y, z) =>
+    Math.min(
+      sdPolygon(Math.hypot(x, z), y, outline),
+      ...bars.map((b) => sdBox(x, y, z, b.centre, b.half)),
+      y, // the floor
+    );
+}
+
 export function createBodyGeometry(name: SilhouetteName = SILHOUETTE): THREE.BufferGeometry {
   const s: Silhouette = SILHOUETTES[name];
   // Enough segments around for ~5 vertices per flute on the knurled band.
   const segments = s.knurl ? s.knurl.count * 5 : 160;
-  const geometry = new THREE.LatheGeometry(sampleProfile(s.profile), segments);
+  const points = sampleProfile(s.profile);
+  const geometry = new THREE.LatheGeometry(points, segments);
   if (s.knurl) applyKnurl(geometry, s.knurl);
   geometry.computeVertexNormals();
+
+  // The body is the same all the way round, so occlusion is computed once per
+  // row of the lathe and shared. Only the knurled flutes vary: each groove is
+  // darkened by its depth so the band reads as cut metal, not a printed stripe.
+  const rows = new Map<number, number>();
+  const pos = geometry.getAttribute("position");
+  const k = s.knurl;
+  const inBand = (i: number) =>
+    !!k &&
+    pos.getY(i) > k.y0 - 1e-4 &&
+    pos.getY(i) < k.y1 + 1e-4 &&
+    Math.hypot(pos.getX(i), pos.getZ(i)) > k.r * (1 - k.depth) - 1e-3;
+  const atProfile = new THREE.Vector3();
+  const outward = new THREE.Vector3();
+  bakeOcclusion(geometry, kingSdf(name), undefined, (i, compute) => {
+    const row = i % points.length;
+    let ao = rows.get(row);
+    if (ao === undefined) {
+      // The flutes are cut just inside the outline, so the band is measured
+      // from its uncut surface, then each groove is darkened by its depth.
+      if (inBand(i)) {
+        outward.set(pos.getX(i), 0, pos.getZ(i)).normalize();
+        ao = compute(atProfile.copy(outward).multiplyScalar(points[row].x).setY(points[row].y), outward);
+      } else {
+        ao = compute();
+      }
+      rows.set(row, ao);
+    }
+    if (k && inBand(i)) {
+      const groove = 0.5 + 0.5 * Math.cos(Math.atan2(pos.getZ(i), pos.getX(i)) * k.count);
+      ao *= 1 - 0.45 * groove;
+    }
+    return ao;
+  });
   return geometry;
 }
 
 // A slim straight cross with chamfered edges, like a piece of jewellery
 // hardware rather than a carved ornament.
-export function createCrossGeometry(name: SilhouetteName = SILHOUETTE): THREE.BufferGeometry {
+function crossDims(name: SilhouetteName) {
   const classic = name === "classic";
-  const w = classic ? 0.026 : 0.0145; // half-width of the bars
-  const arm = classic ? 0.068 : 0.054; // horizontal arm reach
-  // A Latin cross: the long arm is below the bar. Getting this backwards reads
-  // as an inverted cross, especially from a raised camera.
-  const up = classic ? 0.06 : 0.046; // upper arm reach
-  const down = classic ? 0.082 : 0.086; // lower arm reach (part sinks into the dome)
+  return {
+    classic,
+    w: classic ? 0.026 : 0.0145, // half-width of the bars
+    arm: classic ? 0.068 : 0.054, // horizontal arm reach
+    // A Latin cross: the long arm is below the bar. Getting this backwards reads
+    // as an inverted cross, especially from a raised camera.
+    up: classic ? 0.06 : 0.046, // upper arm reach
+    down: classic ? 0.082 : 0.086, // lower arm reach (part sinks into the dome)
+    depth: classic ? 0.03 : 0.022,
+    bevelThickness: classic ? 0.008 : 0.004,
+    bevelSize: classic ? 0.006 : 0.0035,
+  };
+}
+
+// The cross as two boxes, for the occlusion distance field.
+function crossBars(name: SilhouetteName) {
+  const { w, arm, up, down, depth, bevelThickness, bevelSize } = crossDims(name);
+  const y = SILHOUETTES[name].top + down - 0.014;
+  const hz = depth / 2 + bevelThickness;
+  return [
+    { centre: new THREE.Vector3(0, y + (up - down) / 2, 0), half: new THREE.Vector3(w + bevelSize, (up + down) / 2 + bevelSize, hz) },
+    { centre: new THREE.Vector3(0, y, 0), half: new THREE.Vector3(arm + bevelSize, w + bevelSize, hz) },
+  ];
+}
+
+export function createCrossGeometry(name: SilhouetteName = SILHOUETTE): THREE.BufferGeometry {
+  const { classic, w, arm, up, down, depth, bevelThickness, bevelSize } = crossDims(name);
 
   const s = new THREE.Shape();
   s.moveTo(-w, -down);
@@ -151,12 +228,11 @@ export function createCrossGeometry(name: SilhouetteName = SILHOUETTE): THREE.Bu
   s.lineTo(-w, -w);
   s.closePath();
 
-  const depth = classic ? 0.03 : 0.022;
   const geometry = new THREE.ExtrudeGeometry(s, {
     depth,
     bevelEnabled: true,
-    bevelThickness: classic ? 0.008 : 0.004,
-    bevelSize: classic ? 0.006 : 0.0035,
+    bevelThickness,
+    bevelSize,
     bevelSegments: classic ? 4 : 1, // one segment = a crisp chamfer
     curveSegments: 1,
   });
@@ -166,5 +242,14 @@ export function createCrossGeometry(name: SilhouetteName = SILHOUETTE): THREE.Bu
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 4 + 0.5, uv.getY(i) * 4);
   geometry.translate(0, SILHOUETTES[name].top + down - 0.014, -depth / 2);
   geometry.computeVertexNormals();
+  // A short reach: only the last few millimetres where it meets the dome darken.
+  // The extrusion's faces are a handful of long triangles, so a corner buried
+  // in the dome would smear its darkness halfway up the cross; those corners
+  // are hidden anyway and are left fully lit.
+  const outline = sampleProfile(SILHOUETTES[name].profile);
+  const pos = geometry.getAttribute("position");
+  bakeOcclusion(geometry, kingSdf(name), 0.04, (i, compute) =>
+    sdPolygon(Math.hypot(pos.getX(i), pos.getZ(i)), pos.getY(i), outline) < 0 ? 1 : compute(),
+  );
   return geometry;
 }
