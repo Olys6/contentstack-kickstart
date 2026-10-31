@@ -102,6 +102,10 @@
   opacity: 1;
   transform: none;
 }
+/* Leaving is quicker than arriving, so two chapters never linger together. */
+.reveal:not(.is-in) > * {
+  transition-duration: 0.35s;
+}
 .reveal.is-in > *:nth-child(2) { transition-delay: 0.12s; }
 .reveal.is-in > *:nth-child(3) { transition-delay: 0.24s; }
 .reveal.is-in > *:nth-child(4) { transition-delay: 0.36s; }

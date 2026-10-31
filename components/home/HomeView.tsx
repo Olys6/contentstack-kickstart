@@ -9,6 +9,7 @@ import { fill, formatPrice, toLocale } from "@/lib/i18n";
 import type { Chapter, CollectionTeaser, Home, Material } from "@/lib/types";
 import { useLiveEntry } from "@/components/live/useLiveEntry";
 import { useReducedMotion } from "@/lib/useReducedMotion";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { useHref, useSite } from "@/components/shell/SiteProvider";
 import type { Stop } from "./StoryCanvas";
 
@@ -97,6 +98,22 @@ function useChapterProgress(container: React.RefObject<HTMLElement | null>) {
   return progress;
 }
 
+// The chapter the 3D scene is currently on (nearest to the middle of the
+// screen). Re-renders only when it changes, not on every frame.
+function useActiveChapter(progress: React.RefObject<number>) {
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setActive(Math.round(progress.current ?? 0));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [progress]);
+  return active;
+}
+
 function useInView<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [inView, setInView] = useState(false);
@@ -115,15 +132,23 @@ function ChapterSection({
   index,
   cslp,
   revealed,
+  active,
 }: {
   chapter: Chapter;
   index: number;
   cslp?: object;
   revealed: boolean;
+  /** This chapter is the one the scene is on. */
+  active: boolean;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
-  const { settings } = useSite();
+  // On phones every chapter's copy is pinned to the bottom of the screen, so
+  // only the current chapter's copy is shown; otherwise the outgoing and
+  // incoming copy would stack on top of each other.
+  const mobile = useMediaQuery("(max-width: 767px)");
   const hero = chapter.layout === "hero";
+  const shown = hero ? revealed : mobile ? active : inView;
+  const { settings } = useSite();
 
   const place = {
     hero: "items-end justify-center text-center pb-[7svh]",
@@ -141,7 +166,7 @@ function ChapterSection({
       <div
         ref={ref}
         data-hero-copy={hero ? "" : undefined}
-        className={`reveal ${(hero ? revealed : inView) ? "is-in" : ""} ${hero ? "max-w-3xl" : "max-w-md max-md:sticky max-md:bottom-0 max-md:-mx-4 max-md:bg-gradient-to-t max-md:from-ink max-md:via-ink/85 max-md:to-transparent max-md:px-4 max-md:pb-10 max-md:pt-24"}`}
+        className={`reveal ${shown ? "is-in" : ""} ${hero ? "max-w-3xl" : "max-w-md max-md:sticky max-md:bottom-0 max-md:pb-10"}`}
       >
         {chapter.eyebrow && (
           <p className="text-label mb-6 text-gold" {...chapter.$?.eyebrow}>
@@ -246,6 +271,11 @@ export default function HomeView({ initial }: { initial: Home }) {
   const progress = useChapterProgress(container);
   const blocks = useMemo(() => knownBlocks(home), [home]);
   const stops = useMemo(() => toStops(blocks), [blocks]);
+  const active = useActiveChapter(progress);
+  // Phones: one shared backdrop behind the pinned chapter copy, shown only
+  // while a (non-hero) chapter is on screen.
+  const activeBlock = blocks[active]?.block;
+  const scrim = !!activeBlock && "chapter" in activeBlock && activeBlock.chapter.layout !== "hero";
   const reducedMotion = useReducedMotion();
 
   // The hero copy arrives with the lights. If WebGL is slow or unavailable,
@@ -271,6 +301,10 @@ export default function HomeView({ initial }: { initial: Home }) {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,var(--color-ink)_100%)]" />
       </div>
       <div
+        aria-hidden
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[5] h-[55svh] bg-gradient-to-t from-ink via-ink/80 to-transparent transition-opacity duration-700 md:hidden ${scrim ? "opacity-100" : "opacity-0"}`}
+      />
+      <div
         ref={container}
         className={`relative z-10 ${blocks.length ? "" : VB_EmptyBlockParentClass}`}
         {...home.$?.chapters}
@@ -285,6 +319,7 @@ export default function HomeView({ initial }: { initial: Home }) {
                 index={i}
                 cslp={cslp}
                 revealed={revealed}
+                active={blocks.findIndex((b) => b.index === i) === active}
               />
             );
           }
