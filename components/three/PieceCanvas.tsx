@@ -76,7 +76,6 @@ export default function PieceCanvas({
       camera={{ fov: 26, near: 0.05, far: 50, position: [distance * 0.34, 0.5 + distance * 0.12, distance * 0.94] }}
       gl={{ antialias: true }}
       onCreated={({ gl, camera }) => {
-        gl.localClippingEnabled = true;
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 0; // <Reveal> brings the lights up
         camera.lookAt(0, 0.47, 0);

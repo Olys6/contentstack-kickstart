@@ -100,7 +100,8 @@ function Rig({ stops, progress, reducedMotion, onReveal }: StoryProps) {
     if (keyA === keyB) {
       clipNone(kmA);
     } else {
-      const h = lerp(-0.02, 1.02, smoothstep(t, 0.2, 0.8));
+      // Starts and ends just past the piece so the wavering edge never shows a stray fleck.
+      const h = lerp(-0.05, 1.05, smoothstep(t, 0.2, 0.8));
       clipAbove(kmA, h);
       clipBelow(kmB, h);
     }
@@ -158,7 +159,6 @@ export default function StoryCanvas({ stops, progress, reducedMotion, onReveal }
       camera={{ fov: 26, near: 0.05, far: 50, position: [0, 0.5, 3] }}
       gl={{ antialias: true }}
       onCreated={({ gl }) => {
-        gl.localClippingEnabled = true;
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 0; // <Reveal> brings the lights up
       }}
